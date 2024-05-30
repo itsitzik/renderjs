@@ -1,7 +1,7 @@
 <template>
   <div id="main_render">
     <canvas @mousedown.left="startCameraReposition" @mouseup.left="stopCameraReposition" @mousewheel="zoomCamera" @mousemove="dragCamera" @mousedown.middle="startOffsetRepositioning" @mouseup.middle="stopOffsetRepositioning" id="c"></canvas>
-    <div style="display:inline-block;">
+    <div style="display:none;">
         values:<br>
         a: <input type="range" v-model="test.a" step="0.02" min="-1" max="1" /> res: {{test.a}}<br> 
         b: <input type="range" v-model="test.b" step="0.02" min="-1" max="1" /> res: {{test.b}}<br>
@@ -10,7 +10,7 @@
 
         <canvas id="canvas" width="500" height="500"></canvas>
     </div>
-    <div style="display:inline-block;border-left:2px solid red;padding: 5px;display:flex;">
+    <div style="display:none;border-left:2px solid red;padding: 5px;">
         <div style="display:inline-block;padding: 5px;">
             sin(dir) = {{Math.sin(cameraPosition.direction)}}<br>
             sin(ang) = {{Math.sin(cameraPosition.angle)}}<br>
@@ -87,12 +87,52 @@ export default {
             cameraRepositioning: false,
             cameraOffsetRepositioning: false,
             cameraPosition: {
-                direction: 90, //deg
-                angle: 90, //(deg)
+                direction: -135, //deg
+                angle: 80, //(deg)
                 zNear: 0.1,
                 zFar: 0.2
             },
             terrain: null,
+            objects: [
+                {
+                    vertices: [
+                        math.matrix([1, 1, 0, 1]),
+                        math.matrix([1, 1, 1, 1]),
+                        math.matrix([1, 2, 0, 1]),
+                        math.matrix([1, 2, 1, 1]),
+                        math.matrix([2, 1, 0, 1]),
+                        math.matrix([2, 1, 1, 1]),
+                        math.matrix([2, 2, 0, 1]),
+                        math.matrix([2, 2, 1, 1]),
+                    ],
+                    textures: [
+                        {
+                            space: [ 1, 5, 4, 0 ],
+                            resource: 'wood_box'
+                        },
+                        {
+                            space: [ 5, 7, 6, 4 ],
+                            resource: 'wood_box'
+                        },
+                        {
+                            space: [ 7, 3, 2, 6 ],
+                            resource: 'wood_box'
+                        },
+                        {
+                            space: [ 1, 3, 2, 0 ],
+                            resource: 'wood_box'
+                        },
+                        {
+                            space: [ 0, 2, 6, 4 ],
+                            resource: 'wood_box'
+                        },
+                        {
+                            space: [ 1, 3, 7, 5 ],
+                            resource: 'wood_box'
+                        }
+                    ]
+                }
+            ],
             box: {
                 vertices: [
                     math.matrix([1, 1, 0, 1]),
@@ -106,7 +146,39 @@ export default {
                 ],
                 textures: [
                     {
-                        offset: [1, 1, 2, 1],
+                        space: [
+                            [1, 1, 1, 1],
+                            [2, 1, 1, 1],
+                            [2, 1, 0, 1],
+                            [1, 1, 0, 1]
+                        ],
+                        resource: 'wood_box'
+                    },
+                    {
+                        space: [
+                            [2, 1, 1, 1],
+                            [2, 2, 1, 1],
+                            [2, 2, 0, 1],
+                            [2, 1, 0, 1]
+                        ],
+                        resource: 'wood_box'
+                    },
+                    {
+                        space: [
+                            [2, 2, 1, 1],
+                            [1, 2, 1, 1],
+                            [1, 2, 0, 1],
+                            [2, 2, 0, 1]
+                        ],
+                        resource: 'wood_box'
+                    },
+                    {
+                        space: [
+                            [1, 1, 1, 1],
+                            [1, 2, 1, 1],
+                            [1, 2, 0, 1],
+                            [1, 1, 0, 1]
+                        ],
                         resource: 'wood_box'
                     }
                 ]
@@ -127,11 +199,20 @@ export default {
     mounted() {
         this.canvas = document.getElementById("c");
         this.canvas.width = window.innerWidth;
-        this.canvas.height = window.innerHeight - 200;
+        this.canvas.height = window.innerHeight - 40;
         this.ctx = this.canvas.getContext("2d");
         this.getFps();
         this.initResources();
+        // let base = math.matrix([1, 1, 1, 1]);
+        // let translation = this.getTranslationMatrix({x: 3, y: 1, z: 2})
+        // console.log(this.multiplyMatrices([base, translation]));
+
+        // const mA = math.matrix([1, 1, 1, 1]);
+        // const mB = math.matrix([[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [2, 2, 2, 1]]);
+        // console.log(this.multiplyMatrices([mA, mB]));
+        // console.log(matrixMult);
         this.gameLoop();
+
     },
     methods: {
         gameLoop: function() {
@@ -143,8 +224,9 @@ export default {
             
             this.drawTerrain();
             this.drawVectors();
+            this.drawObjects();
             // this.drawCube();
-            this.drawBox();
+            // this.drawBox();
             
             requestAnimationFrame(this.gameLoop);
         },
@@ -216,7 +298,21 @@ export default {
             });
 
             if (this.resources.terrain.loaded) {
-                this.skawImage(this.resources.terrain, [-5, 5, 0, 1], 10*this.scale, 10*this.scale);
+                let space = [
+                    [-5, 5, 0, 1],
+                    [5, 5, 0, 1],
+                    [5, -5, 0, 1],
+                    [-5, -5, 0, 1]
+                ];
+                let coordinatesList = space.map((vertex) => {
+                    let position_matrix = this.multiplyMatrices([this.getTranslationMatrix({x: 0, y: 0, z: 0}), this.getScaleMatrix({x: this.scale, y: this.scale, z: this.scale}), this.getRotateAroundXMatrix(this.cameraPosition.angle), this.getRotateAroundYMatrix(0), this.getRotateAroundZMatrix(this.cameraPosition.direction), vertex]);
+                    return {
+                        x: position_matrix._data[0],
+                        y: position_matrix._data[1],
+                        z: position_matrix._data[2],
+                    };
+                });
+                this.skawImage(this.resources.terrain, coordinatesList, 10*this.scale, 10*this.scale);
             }
         },
         drawVectors: function() {
@@ -281,55 +377,68 @@ export default {
                 });
 
                 this.box.textures.forEach((texture) => {
-                    });
-                    this.skawImage2(this.resources['wood_box'], [1, 1, 1, 1], this.scale, this.scale);
-                    this.skawImage3(this.resources['wood_box'], [2, 1, 1, 1], this.scale, this.scale);
+                    
+                    this.skawImage(this.resources[texture.resource], texture.space, this.scale, this.scale);
+                });
+                    // this.skawImage(this.resources['wood_box'], [2, 1, 1, 1], this.scale, this.scale);
             }
 
 
         },
-        skawImage: function(resource, offset, width, height) {
+        drawObjects: function() {
+
             let center = this.getCenter();
-            var canvas = document.createElement('canvas');
-            canvas.id = "virtual";
+            let sortedZobjects = this.objects;
 
-            canvas.width = 1920;
-            canvas.height = 1080;
-            let context = canvas.getContext('2d');
+            let all_texture = [];
 
-            let pointData = math.matrix(offset);
-            let pointData2 = math.matrix([5, -5, 0, 1]);
-            let pointData3 = math.matrix([5, 5, 0, 1]);
-            let pointData4 = math.matrix([-5, 5, 0, 1]);
+            sortedZobjects.forEach((object) => {
 
-            let start_point_matrix1 = this.multiplyMatrices([this.getTranslationMatrix({x: 0, y: 0, z: 0}), this.getScaleMatrix({x: this.scale, y: this.scale, z: this.scale}), this.getRotateAroundXMatrix(this.cameraPosition.angle), this.getRotateAroundYMatrix(0), this.getRotateAroundZMatrix(this.cameraPosition.direction), pointData]);
-            let start_point_matrix2 = this.multiplyMatrices([this.getTranslationMatrix({x: 0, y: 0, z: 0}), this.getScaleMatrix({x: this.scale, y: this.scale, z: this.scale}), this.getRotateAroundXMatrix(this.cameraPosition.angle), this.getRotateAroundYMatrix(0), this.getRotateAroundZMatrix(this.cameraPosition.direction), pointData2]);
-            let start_point_matrix3 = this.multiplyMatrices([this.getTranslationMatrix({x: 0, y: 0, z: 0}), this.getScaleMatrix({x: this.scale, y: this.scale, z: this.scale}), this.getRotateAroundXMatrix(this.cameraPosition.angle), this.getRotateAroundYMatrix(0), this.getRotateAroundZMatrix(this.cameraPosition.direction), pointData3]);
-            let start_point_matrix4 = this.multiplyMatrices([this.getTranslationMatrix({x: 0, y: 0, z: 0}), this.getScaleMatrix({x: this.scale, y: this.scale, z: this.scale}), this.getRotateAroundXMatrix(this.cameraPosition.angle), this.getRotateAroundYMatrix(0), this.getRotateAroundZMatrix(this.cameraPosition.direction), pointData4]);
+                let coordinatesList = object.vertices.map((vertex) => {
+                    let transformedMatrix = this.multiplyMatrices([this.getTranslationMatrix({x: 2, y: 3, z: 2}), vertex]);
+                    console.log(transformedMatrix);
+                    let position_matrix = this.multiplyMatrices([
+                        this.getScaleMatrix({x: this.scale, y: this.scale, z: this.scale}),
+                        this.getRotateAroundXMatrix(this.cameraPosition.angle),
+                        this.getRotateAroundYMatrix(0),
+                        this.getRotateAroundZMatrix(this.cameraPosition.direction),
+                        transformedMatrix
+                    ]);
+                    return {
+                        x: position_matrix._data[0],
+                        y: position_matrix._data[1],
+                        z: position_matrix._data[2],
+                    };
+                });
 
+                coordinatesList.forEach((coordinates) => {
+                    this.ctx.fillStyle = 'white';
+                    this.ctx.fillRect(center.x + coordinates.x, center.y - coordinates.y, 2, 2);
+                    this.ctx.stroke();
+                });
 
-            this.ctx.fillStyle = 'red';
-            this.ctx.fillRect(center.x + start_point_matrix1._data[0], center.y - start_point_matrix1._data[1], 5, 5);
-            this.ctx.fillStyle = 'green';
-            this.ctx.fillRect(center.x + start_point_matrix2._data[0], center.y - start_point_matrix2._data[1], 5, 5);
-            this.ctx.fillStyle = 'blue';
-            this.ctx.fillRect(center.x + start_point_matrix3._data[0], center.y - start_point_matrix3._data[1], 5, 5);
-            this.ctx.fillRect(center.x + start_point_matrix4._data[0], center.y - start_point_matrix4._data[1], 5, 5);
+                object.textures.forEach((texture) => {
+                    let clip = [
+                        coordinatesList[texture.space[0]],
+                        coordinatesList[texture.space[1]],
+                        coordinatesList[texture.space[2]],
+                        coordinatesList[texture.space[3]],
+                    ];
+                    all_texture.push({
+                        clip: clip,
+                        min: Math.min(clip[0].z, clip[1].z, clip[2].z, clip[3].z),
+                        resource: texture.resource
+                    });
+                });
+            });
 
-            context.setTransform(
-                Math.cos(this.cameraPosition.direction * this.radFactor),
-                Math.sin(this.cameraPosition.direction * this.radFactor)*Math.cos(this.cameraPosition.angle * this.radFactor),
-                -Math.sin(this.cameraPosition.direction * this.radFactor),
-                Math.cos(this.cameraPosition.direction * this.radFactor)*Math.cos(this.cameraPosition.angle * this.radFactor),
-                center.x + start_point_matrix1._data[0],
-                center.y - start_point_matrix1._data[1]
-            );
-
-            context.drawImage(resource.imgObj, 0, 0, width, height);
-
-            this.ctx.drawImage(canvas, 0, 0)
+            all_texture = all_texture.sort((a, b) => {
+                return a.min - b.min;
+            }).forEach((texture) => {
+                this.skawImage(this.resources[texture.resource], texture.clip, this.scale, this.scale);
+            });            
         },
-        skawImage2: function(resource, offset, width, height) {
+        skawImage: function(resource, points, width, height) {
             let center = this.getCenter();
             var canvas = document.createElement('canvas');
             canvas.id = "virtual";
@@ -338,98 +447,33 @@ export default {
             canvas.height = 1080;
             let context = canvas.getContext('2d');
 
-            let pointData = math.matrix(offset);
-            let pointData2 = math.matrix([5, -5, 0, 1]);
-            let pointData3 = math.matrix([5, 5, 0, 1]);
-            let pointData4 = math.matrix([-5, 5, 0, 1]);
-
-            let start_point_matrix1 = this.multiplyMatrices([this.getTranslationMatrix({x: 0, y: 0, z: 0}), this.getScaleMatrix({x: this.scale, y: this.scale, z: this.scale}), this.getRotateAroundXMatrix(this.cameraPosition.angle), this.getRotateAroundYMatrix(0), this.getRotateAroundZMatrix(this.cameraPosition.direction), pointData]);
-            let start_point_matrix2 = this.multiplyMatrices([this.getTranslationMatrix({x: 0, y: 0, z: 0}), this.getScaleMatrix({x: this.scale, y: this.scale, z: this.scale}), this.getRotateAroundXMatrix(this.cameraPosition.angle), this.getRotateAroundYMatrix(0), this.getRotateAroundZMatrix(this.cameraPosition.direction), pointData2]);
-            let start_point_matrix3 = this.multiplyMatrices([this.getTranslationMatrix({x: 0, y: 0, z: 0}), this.getScaleMatrix({x: this.scale, y: this.scale, z: this.scale}), this.getRotateAroundXMatrix(this.cameraPosition.angle), this.getRotateAroundYMatrix(0), this.getRotateAroundZMatrix(this.cameraPosition.direction), pointData3]);
-            let start_point_matrix4 = this.multiplyMatrices([this.getTranslationMatrix({x: 0, y: 0, z: 0}), this.getScaleMatrix({x: this.scale, y: this.scale, z: this.scale}), this.getRotateAroundXMatrix(this.cameraPosition.angle), this.getRotateAroundYMatrix(0), this.getRotateAroundZMatrix(this.cameraPosition.direction), pointData4]);
+            // let points = space.map((point) => {
+            //     let pointMatrix = math.matrix(point);
+            //     return this.multiplyMatrices([this.getTranslationMatrix({x: 0, y: 0, z: 0}), this.getScaleMatrix({x: this.scale, y: this.scale, z: this.scale}), this.getRotateAroundXMatrix(this.cameraPosition.angle), this.getRotateAroundYMatrix(0), this.getRotateAroundZMatrix(this.cameraPosition.direction), pointMatrix]);
+            // })
 
             this.ctx.fillStyle = 'red';
-            this.ctx.fillRect(center.x + start_point_matrix1._data[0], center.y - start_point_matrix1._data[1], 5, 5);
+            this.ctx.fillRect(center.x + points[0].x, center.y - points[0].y, 5, 5);
             this.ctx.fillStyle = 'green';
-            this.ctx.fillRect(center.x + start_point_matrix2._data[0], center.y - start_point_matrix2._data[1], 5, 5);
+            this.ctx.fillRect(center.x + points[1].x, center.y - points[1].y, 5, 5);
             this.ctx.fillStyle = 'blue';
-            this.ctx.fillRect(center.x + start_point_matrix3._data[0], center.y - start_point_matrix3._data[1], 5, 5);
-            this.ctx.fillRect(center.x + start_point_matrix4._data[0], center.y - start_point_matrix4._data[1], 5, 5);
+            this.ctx.fillRect(center.x + points[2].x, center.y - points[2].y, 5, 5);
+            this.ctx.fillRect(center.x + points[3].x, center.y - points[3].y, 5, 5);
             
-            // context.rotate(90 * this.radFactor);
-            // context.setTransform(
-            //     Math.cos(this.cameraPosition.direction * this.radFactor),
-            //     Math.sin(this.cameraPosition.direction * this.radFactor)*Math.cos(this.cameraPosition.angle * this.radFactor),
-            //     -Math.sin(this.cameraPosition.direction * this.radFactor),
-            //     Math.cos(this.cameraPosition.direction * this.radFactor)*Math.cos(this.cameraPosition.angle * this.radFactor),
-            //     center.x + start_point_matrix1._data[0],
-            //     center.y - start_point_matrix1._data[1]
-            // );
+            var scaleX = (points[1].x - points[0].x) / width;
+            var scaleY = (points[2].y - points[1].y) / height;
+
+            var skewX = (points[0].y - points[1].y) / height;
+            var skewY = (points[2].x - points[1].x) / width;
+
             context.setTransform(
-                Math.cos(this.cameraPosition.direction * this.radFactor),
-                Math.sin(this.cameraPosition.direction * this.radFactor)*Math.cos(this.cameraPosition.angle * this.radFactor),
-                0,
-                Math.sin(this.cameraPosition.angle * this.radFactor),
-                center.x + start_point_matrix1._data[0],
-                center.y - start_point_matrix1._data[1]
+                scaleX,
+                skewX,
+                skewY,
+                -scaleY,
+                center.x + points[0].x,
+                center.y - points[0].y
             );
-
-            context.drawImage(resource.imgObj, 0, 0, width, height);
-            this.ctx.drawImage(canvas, 0, 0)
-        },
-        skawImage3: function(resource, offset, width, height) {
-            let center = this.getCenter();
-            var canvas = document.createElement('canvas');
-            canvas.id = "virtual";
-
-            canvas.width = 1920;
-            canvas.height = 1080;
-            let context = canvas.getContext('2d');
-
-            let pointData = math.matrix(offset);
-            let pointData2 = math.matrix([5, -5, 0, 1]);
-            let pointData3 = math.matrix([5, 5, 0, 1]);
-            let pointData4 = math.matrix([-5, 5, 0, 1]);
-
-            let start_point_matrix1 = this.multiplyMatrices([this.getTranslationMatrix({x: 0, y: 0, z: 0}), this.getScaleMatrix({x: this.scale, y: this.scale, z: this.scale}), this.getRotateAroundXMatrix(this.cameraPosition.angle), this.getRotateAroundYMatrix(0), this.getRotateAroundZMatrix(this.cameraPosition.direction), pointData]);
-            let start_point_matrix2 = this.multiplyMatrices([this.getTranslationMatrix({x: 0, y: 0, z: 0}), this.getScaleMatrix({x: this.scale, y: this.scale, z: this.scale}), this.getRotateAroundXMatrix(this.cameraPosition.angle), this.getRotateAroundYMatrix(0), this.getRotateAroundZMatrix(this.cameraPosition.direction), pointData2]);
-            let start_point_matrix3 = this.multiplyMatrices([this.getTranslationMatrix({x: 0, y: 0, z: 0}), this.getScaleMatrix({x: this.scale, y: this.scale, z: this.scale}), this.getRotateAroundXMatrix(this.cameraPosition.angle), this.getRotateAroundYMatrix(0), this.getRotateAroundZMatrix(this.cameraPosition.direction), pointData3]);
-            let start_point_matrix4 = this.multiplyMatrices([this.getTranslationMatrix({x: 0, y: 0, z: 0}), this.getScaleMatrix({x: this.scale, y: this.scale, z: this.scale}), this.getRotateAroundXMatrix(this.cameraPosition.angle), this.getRotateAroundYMatrix(0), this.getRotateAroundZMatrix(this.cameraPosition.direction), pointData4]);
-
-            this.ctx.fillStyle = 'red';
-            this.ctx.fillRect(center.x + start_point_matrix1._data[0], center.y - start_point_matrix1._data[1], 5, 5);
-            this.ctx.fillStyle = 'green';
-            this.ctx.fillRect(center.x + start_point_matrix2._data[0], center.y - start_point_matrix2._data[1], 5, 5);
-            this.ctx.fillStyle = 'blue';
-            this.ctx.fillRect(center.x + start_point_matrix3._data[0], center.y - start_point_matrix3._data[1], 5, 5);
-            this.ctx.fillRect(center.x + start_point_matrix4._data[0], center.y - start_point_matrix4._data[1], 5, 5);
-            
-            // context.rotate(90 * this.radFactor);
-            // context.setTransform(
-            //     Math.cos(this.cameraPosition.direction * this.radFactor),
-            //     Math.sin(this.cameraPosition.direction * this.radFactor)*Math.cos(this.cameraPosition.angle * this.radFactor),
-            //     -Math.sin(this.cameraPosition.direction * this.radFactor),
-            //     Math.cos(this.cameraPosition.direction * this.radFactor)*Math.cos(this.cameraPosition.angle * this.radFactor),
-            //     center.x + start_point_matrix1._data[0],
-            //     center.y - start_point_matrix1._data[1]
-            // );
-            context.setTransform(
-                Math.cos((this.cameraPosition.direction-90) * this.radFactor),
-                Math.sin((this.cameraPosition.direction-90) * this.radFactor)*Math.cos(this.cameraPosition.angle * this.radFactor),
-                0,
-                Math.sin(this.cameraPosition.angle * this.radFactor),
-                center.x + start_point_matrix1._data[0],
-                center.y - start_point_matrix1._data[1]
-            );
-
-            // context.setTransform(
-            //     Math.cos(this.cameraPosition.direction * this.radFactor),
-            //     Math.sin(this.cameraPosition.direction * this.radFactor)*Math.cos(this.cameraPosition.angle * this.radFactor),
-            //     0,
-            //     Math.sin(this.cameraPosition.angle * this.radFactor),
-            //     center.x + start_point_matrix1._data[0],
-            //     center.y - start_point_matrix1._data[1]
-            // );
 
             context.drawImage(resource.imgObj, 0, 0, width, height);
             this.ctx.drawImage(canvas, 0, 0)
@@ -465,10 +509,20 @@ export default {
             // return math.multiply(matrix, projectionMatrix);
         },
         getTranslationMatrix: function(translation) {
-            return math.matrix([[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [translation.x, translation.y, translation.z, 1]]);
+            return math.matrix([
+                [1, 0, 0, 0],
+                [0, 1, 0, 0],
+                [0, 0, 1, 0],
+                [translation.x, translation.y, translation.z, 1]
+            ]);
         },
         getScaleMatrix: function(scale) {
-            return math.matrix([[scale.x, 0, 0, 0], [0, scale.y, 0, 0], [0, 0, scale.z, 0], [0, 0, 0, 1]]);
+            return math.matrix([
+                [scale.x, 0, 0, 0],
+                [0, scale.y, 0, 0],
+                [0, 0, scale.z, 0],
+                [0, 0, 0, 1]
+            ]);
         },
         multiplyMatrices: function(matrices) {
             let matrix = math.identity(4);
@@ -530,12 +584,14 @@ export default {
             if (e.pageY < this.mouseOldY) {
                 if (this.cameraRepositioning) {
                     this.cameraPosition.angle = Math.min(this.cameraPosition.angle + this.velcosityY, 90);
+                    // this.cameraPosition.angle = this.cameraPosition.angle + this.velcosityY;
                 } else if (this.cameraOffsetRepositioning) {
                     //
                 }
             } else if (e.pageY > this.mouseOldY) {
                 if (this.cameraRepositioning) {
                     this.cameraPosition.angle = this.cameraPosition.angle - this.velcosityY < 0 ? 0 : this.cameraPosition.angle - this.velcosityY;
+                    // this.cameraPosition.angle = this.cameraPosition.angle - this.velcosityY
                 } else if (this.cameraOffsetRepositioning) {
                     //
                 }
@@ -562,7 +618,7 @@ export default {
 
 <style>
     #main_render {
-        height: calc(100vh - 200);
+        height: calc(100vh - 40px);
         width: 100%;
     }
     #c {
